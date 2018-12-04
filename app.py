@@ -17,7 +17,7 @@ def parseConfig():
 
     influx_auth = ['INFLUXDB_HOST',
                    'INFLUXDB_DATABASE',
-                   'INFLUXDB_USER',
+                   'INFLUXDB_USERNAME',
                    'INFLUXDB_PASSWORD']
 
     data = {}
@@ -92,7 +92,7 @@ def main():
 
     client = initDBClient(data['INFLUXDB_HOST'],
                           data['INFLUXDB_DATABASE'],
-                          data['INFLUXDB_USER'],
+                          data['INFLUXDB_USERNAME'],
                           data['INFLUXDB_PASSWORD'])
 
     createInfluxDB(client, data['INFLUXDB_DATABASE'])

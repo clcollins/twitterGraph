@@ -1,4 +1,3 @@
-tstats.conf
-tstats_config
+source_me
 secrets.yml
 __pycache__/

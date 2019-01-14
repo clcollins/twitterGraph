@@ -34,7 +34,7 @@ Follow the [Twitter instructions to sign up for a Developer account](https://dev
 
 [InfluxDB](https://www.influxdata.com/time-series-platform/influxdb/) is an opensource data store designed specifically for time series data.  Since this project will be polling Twitter on a schedule using a Kubernetes CronJob, InfluxDB is perfect for holding storing the data.
 
-The [Official InfluxDB Image on DockerHub](https://hub.docker.com/_/influxdb) will work fine for this project.  It works out-of-the-box with both Kubernetes and OKD ([see OKD Considerations below](#okd_considerations)).
+The [Docker-maintained InfluxDB Image on DockerHub](https://hub.docker.com/_/influxdb) will work fine for this project.  It works out-of-the-box with both Kubernetes and OKD ([see OKD Considerations below](#okd_considerations)).
 
 
 ### Create a Deployment
@@ -171,7 +171,7 @@ spec:
   containers:
   - name: influxdb
     envFrom:
-      secretKeyRef:
+    - secretRef:
         name: influxdb-creds
 ```
 
@@ -180,18 +180,15 @@ After editing the deployment, Kubernetes will destroy the running pod and create
 You can validate the environment variables are included in your deployment with `kubectl describe deployment influxdb`:
 
 ```
-    Environment:
-      INFLUXDB_USERNAME:  <set to the key 'INFLUXDB_USERNAME' in secret 'influxdb-creds'>  Optional: false
-      INFLUXDB_PASSWORD:  <set to the key 'INFLUXDB_PASSWORD' in secret 'influxdb-creds'>  Optional: false
-      INFLUXDB_DATABASE:  <set to the key 'INFLUXDB_DATABASE' in secret 'influxdb-creds'>  Optional: false
-      INFLUXDB_HOST:      <set to the key 'INFLUXDB_HOST' in secret 'influxdb-creds'>      Optional: false
+    Environment Variables from:
+      influxdb-creds  Secret  Optional: false
 ```
 
 ### Configure persistent storage for InfluxDB
 
 A database is not very useful if all of its data is destroyed each time the service is restarted.  In the current InfluxDB deployment, the data is all stored in the contianer itself, and is lost when Kubernetes destroys and recreates pods.  A [PersistentVolume](https://kubernetes.io/docs/concepts/storage/persistent-volumes/) is needed to store data permanently.
 
-In order to get persistent storage in a Kubernetes cluster, a [PersistentVolumeClaim]https://kubernetes.io/docs/concepts/storage/persistent-volumes/#persistentvolumeclaims) (PVC) is created describing the type and details of the volume needed, and Kubernetes will find a previously created volume that fits the request (or create one with a dynamic volume provisioner, if there is one).
+In order to get persistent storage in a Kubernetes cluster, a [PersistentVolumeClaim](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#persistentvolumeclaims) (PVC) is created describing the type and details of the volume needed, and Kubernetes will find a previously created volume that fits the request (or create one with a dynamic volume provisioner, if there is one).
 
 Unfortunately, the `kubectl` cli tool does not have the ability to create PersistentVolumeClaims directly, but a PVC can be specified as a yaml file and created with `kubectl create -f <filename>`:
 
@@ -337,9 +334,64 @@ spec:
 status: {}
 ```
 
+Now that InfluxDB is setup, we can move on to Grafana.
+
+
 ## Setup Grafana
 
-Now that InfluxDB is setup, we can move on to Grafana.
+ [Grafana](https://grafana.com/).  Grafana is an open source project for visualizing time series data (thing: pretty, pretty graphs).
+
+As with Influxdb, [The Official Grafana image on DockerHub, maintained by Grafana](https://hub.docker.com/r/grafana/grafana/) works out-of-the-box for this project, both with Kubernetes and OKD.
+
+
+### Create a Deployment
+
+So, just as we did before, create a deployment based on the Official Grafana image:
+
+```
+kubectl create deployment grafana --image=docker.io/grafana/grafana:5.3.2
+```
+
+There should now be a "grafana" deployment alongside the "influxdb" deployment:
+
+```
+kubectl get deployments
+NAME       DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+grafana    1         1         1            1           7s
+influxdb   1         1         1            1           5h12m
+```
+
+Building on what you've already learned, configuring Grafana should be both similar, and easier.  Grafana doesn't require persistent storage, since it's reading its data out of the InfluxDB database.  It does, however, have two configuration files needed to setup a [Dashboard Provider](http://docs.grafana.org/v5.0/administration/provisioning/#dashboards) to load dashboards dynamically from files, the dashboard file itself, a third file to connect it to InfluxDB as a datasource, and finally a secret to store default login credentials.
+
+The credentials secret works the same as the "influxdb-creds" secret created already.  By default, the Grafana image looks for environment variables named "GF_SECURITY_ADMIN_USER" and "GF_SECURITY_ADMIN_PASSWORD" to set the admin username and password on startup.  These can be whatever you like, but remember them so you can use them to login to Grafana when we have it configured.
+
+Create a secret named "grafana-creds" for the Grafana credentials with the `kubectl create secret` command:
+
+```
+kubectl create secret generic grafana-creds \
+  --from-literal=GF_SECURITY_ADMIN_USER=admin \
+  --from-literal=GF_SECURITY_ADMIN_PASSWORD=graphsRcool
+```
+
+Share this secret as environment variables using `envFrom`, this time in the Grafana deployment.  Edit the deployment with `kubectl edit deployment grafana` and add the environment variables to the container spec:
+
+```
+spec:
+  containers:
+  - name: grafana
+    envFrom:
+    - secretRef:
+        name: grafana-creds
+```
+
+And validate the environment variables have been added to the deployment with `kubectl describe deployment grafana`:
+
+```
+    Environment Variables from:
+      grafana-creds  Secret  Optional: false
+```
+
+
 
 ## Create the CronJob
 

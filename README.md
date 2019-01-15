@@ -1,6 +1,6 @@
 # Monitor Your Twitter Stats with a Python script, InfluxDB and Grafana running in Kubernetes or OKD
 
-
+![TwitterGraph data in Grafana](images/twittergraph.png "TwitterGraph data in Grafana")
 
 ## Requirements
 

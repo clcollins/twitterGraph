@@ -1,6 +1,5 @@
 # Monitor Your Twitter Stats with a Python script, InfluxDB and Grafana running in Kubernetes or OKD
 
-INTRODUCTION
 
 
 ## Requirements
@@ -28,6 +27,11 @@ All of these components run in Kubernetes- or OKD-managed containers.
 ## Prerequisite: Get a Twitter Developer API Account
 
 Follow the [Twitter instructions to sign up for a Developer account](https://developer.twitter.com/en/apply/user), allowing access to the Twitter API.  Record your `API_KEY`, `API_SECRET`, `ACCESS_TOKEN` and `ACCESS_SECRET` to use later.
+
+
+## Prerequisite: Clone the TwitterGraph Repo
+
+The [TwitterGraph Github Repo](https://github.com/clcollins/twitterGraph/) contains all the files needed for this project, as well as a few to make life easier if you wanted to do it all over again.
 
 
 ## Setup InfluxDB
@@ -292,27 +296,9 @@ spec:
         app: influxdb
     spec:
       containers:
-      - env:
-        - name: INFLUXDB_USERNAME
-          valueFrom:
-            secretKeyRef:
-              key: INFLUXDB_USERNAME
-              name: influxdb-creds
-        - name: INFLUXDB_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              key: INFLUXDB_PASSWORD
-              name: influxdb-creds
-        - name: INFLUXDB_DATABASE
-          valueFrom:
-            secretKeyRef:
-              key: INFLUXDB_DATABASE
-              name: influxdb-creds
-        - name: INFLUXDB_HOST
-          valueFrom:
-            secretKeyRef:
-              key: INFLUXDB_HOST
-              name: influxdb-creds
+      - envFrom:
+        - secretRef:
+            name: influxdb-creds
         image: docker.io/influxdb:1.6.4
         imagePullPolicy: IfNotPresent
         name: influxdb
@@ -333,6 +319,35 @@ spec:
           claimName: influxdb
 status: {}
 ```
+
+### Expose InfluxDB (to the cluster only) with a Serivce
+
+By default, pods in this project are unable to talk to one another.  A [Kubernetes Service]() is required to "expose" the pod to the cluster, or to the public. In the case of InfluxDB, the pod needs to be able to accept traffic on TCP port 8086 from the Grafana and Cron Job pods (that will be created later).  To do this, we expose (create a service for) the pod, using a Cluster IP.  Cluster IPs are only available to other pods in the cluster.  We do this with the `kubectl expose` command:
+
+```
+kubectl expose deployment influxdb --port=8086 --target-port=8086 --protocol=TCP --type=ClusterIP
+```
+
+The newly-created service can be verified with `kubectl describe service` command:
+
+```
+kubectl describe service influxdb
+Name:              influxdb
+Namespace:         twittergraph
+Labels:            app=influxdb
+                   project=twittergraph
+Annotations:       <none>
+Selector:          app=influxdb
+Type:              ClusterIP
+IP:                10.108.196.112
+Port:              <unset>  8086/TCP
+TargetPort:        8086/TCP
+Endpoints:         172.17.0.5:8086
+Session Affinity:  None
+Events:            <none>
+```
+
+Some of the details (specifically the IP addresses) will vary from the example.  The "IP" is an ip address internal to your cluster that's been assigned to the service, thought which other pods can communicate with InfluxDB.  The "Endpoints" is the IP and port of the container itself, listening for connections.  The service will route traffic to the internal cluster IP to the container itself.
 
 Now that InfluxDB is setup, we can move on to Grafana.
 
@@ -360,6 +375,8 @@ NAME       DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
 grafana    1         1         1            1           7s
 influxdb   1         1         1            1           5h12m
 ```
+
+### Setup Grafana credentials and config files with Secrets and ConfigMaps
 
 Building on what you've already learned, configuring Grafana should be both similar, and easier.  Grafana doesn't require persistent storage, since it's reading its data out of the InfluxDB database.  It does, however, have two configuration files needed to setup a [Dashboard Provider](http://docs.grafana.org/v5.0/administration/provisioning/#dashboards) to load dashboards dynamically from files, the dashboard file itself, a third file to connect it to InfluxDB as a datasource, and finally a secret to store default login credentials.
 
@@ -391,11 +408,226 @@ And validate the environment variables have been added to the deployment with `k
       grafana-creds  Secret  Optional: false
 ```
 
+That's all that's _required_ to start using Grafana.  The rest of the configuration can be done in the web interface if desired, but with just a few config files, Grafana can be fully configured when it starts.
+
+[Kubernetes ConfigMaps](https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/) are similar to secrets and can be consumed the same way by a pod, but do not store the information obfuscated within Kubernetes.  Config maps are useful for adding configuration files or variables into the containers in a pod.
+
+The Grafana instance in this project has three config files that need to be written into the running container:
+
+*   influxdb-datasource.yml - tells Grafana how to talk to the InfluxDB database
+*   grafana-dashboard-provider.yml - tells Grafana where to look for JSON files describing dashboards
+*   twittergraph-dashboard.json - describes the dashboard for displaying the Twitter data we collect
+
+Kubernetes makes adding all these files easy: they can all be added to the same config map at once, and they can be mounted to different locations on the filesystem despite being in  the same config map.
+
+If you have not done so already, clone the [TwitterGraph Github Repo](https://github.com/clcollins/twitterGraph/).  These files are really specific to this particular project, so the easiest way to consume them is directly from the repo (though, they could certainly be written manually).
+
+From the directory with the contents of the repo, create a config map named grafana-config using the `kubectl create configmap` command:
+
+```
+kubectl create configmap grafana-config \
+  --from-file=influxdb-datasource.yml=influxdb-datasource.yml \
+  --from-file=grafana-dashboard-provider.yml=grafana-dashboard-provider.yml \
+  --from-file=twittergraph-dashboard.json=twittergraph-dashboard.json
+```
+
+
+The `kubectl create configmap` command above creates a config map named grafana-config, and stores the contents as the value for the key specified.  The `--from-file` argument follows the form `--from-file=<keyname>=<pathToFile>`, so in this case, the filename is being used as the key, for future clarity.
+
+Like secrets, details of a config map can be seen with `kubectl describe configmap`.  Unlike secrets, the contents of the config map are visible in the output.  Use the `kubectl describe configmap grafana-config` to see the three files stored as keys in the config map (results here truncated - because they're looooooong):
+
+```
+kubectl describe configmap grafana-config
+kubectl describe cm grafana-config
+Name:         grafana-config
+Namespace:    twittergraph
+Labels:       <none>
+Annotations:  <none>
+
+Data
+====
+grafana-dashboard-provider.yml:
+----
+apiVersion: 1
+
+providers:
+- name: 'default'
+  orgId: 1
+  folder: ''
+  type: file
+<snip>
+```
+
+Each of the filenames should be stored as keys, and their contents as the values (such as the "grafana-dashboard-provider.yml", above).
+
+While config maps can be shared as environment variables, the way the credential secrets were above, the contents of this config map need to be mounted into the container as files. To do this, a volume can be created from config map in the "grafana" deployment.  Similar to the persistent volume, use `kubectl edit deployment grafana` to add volume `.spec.template.spec.volumes` like so:
+
+```
+spec:
+  template:
+    spec:
+      volumes:
+      - configMap:
+          name: grafana-config
+        name: grafana-config
+```
+
+Then, edit the container spec to mount each of the keys stored in the config map as files in their respective locations in the Grafana container.  Under `.spec.template.spec.containers`, add a volumeMouts section for the volumes:
+
+```
+spec:
+  template:
+    spec:
+      containers:
+      - name: grafana
+        volumeMounts:
+        - mountPath: /etc/grafana/provisioning/datasources/influxdb-datasource.yml
+          name: grafana-config
+          readOnly: true
+          subPath: influxdb-datasource.yml
+        - mountPath: /etc/grafana/provisioning/dashboards/grafana-dashboard-provider.yml
+          name: grafana-config
+          readOnly: true
+          subPath: grafana-dashboard-provider.yml
+        - mountPath: /var/lib/grafana/dashboards/twittergraph-dashboard.json
+          name: grafana-config
+          readOnly: true
+          subPath: twittergraph-dashboard.json
+```
+
+The `name` section references the name of the config map "volume", and the addition of the `subPath` items allows Kubernetes to mount each file without overwriting the rest of the contents of that directory.  Without it, "/etc/grafana/provisioning/datasources/influxdb-datasource.yml" for example, would be the only file in "/etc/grafana/provisioning/datasources".
+
+Each of the files can be verified by looking at them within the running container using the `kubectl exec` command.  First find the Grafana pod's current name.  The pod will have a randomized name similar to `grafana-586775fcc4-s7r2z`, and should be visible when running the command `kubectl get pods`:
+
+```
+kubectl get pods
+NAME                        READY     STATUS    RESTARTS   AGE
+grafana-586775fcc4-s7r2z    1/1       Running   0          93s
+influxdb-595487b7f9-zgtvx   1/1       Running   0          18h
+```
+
+Substituting the name of your Grafana pod, you can verify the contents of the influxdb-datasource.yml file, for example (truncated for brevity):
+
+```
+kubectl exec -it grafana-586775fcc4-s7r2z cat /etc/grafana/provisioning/datasources/influxdb-datasource.yml
+# config file version
+apiVersion: 1
+
+# list of datasources to insert/update depending
+# what's available in the database
+datasources:
+  # <string, required> name of the datasource. Required
+- name: influxdb
+```
+
+### Expose the Grafana service
+
+Now that it's configured, expose the Grafana service so it can be viewed in a browser.  Because Grafana should be visible from outside the cluster, the "LoadBalancer" service type will be used rather than the internal-only "ClusterIP" type.
+
+For production clusters or cloud environments that support LoadBalancer services, an external IP is dynamically provisioned when the service is created.  For MiniKube or MiniShift, LoadBalancer services are available via the `minikube service` command, which opens your default browser to a URL and port where the service is available on your host VM.
+
+The Grafana deployment is listening on port 3000 for HTTP traffic.  Expose it, using the LoadBalancer-type service, using the `kubectl expose` command:
+
+```
+kubectl expose deployment grafana --type=LoadBalancer --port=80 --target-port=3000 --protocol=TCP
+service/grafana exposed
+```
+
+After the service is exposed, you can validate the configuration with `kubectl get service grafana`:
+
+```
+kubectl get service grafana
+NAME      TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+grafana   LoadBalancer   10.101.113.249   <pending>     80:31235/TCP   9m35s
+```
+
+As mentioned above, MiniKube and MiniShift deployments will not automatically assign an EXTERNAL-IP, and will listed as "<pending>".  Running `minikube service grafana` (or `minikube service grafana --namespace <namespace>` if you created your deployments a namespace other than "Default") will open your default browser to the IP and Port combo where Grafana is exposed on your host VM.
+
+At this point, Grafana is configured to talk to InfluxDB, and has and automatically-provisioned dashboard to display the Twitter stats.  Now it's time to get some actual stats and put them into the database.
 
 
 ## Create the CronJob
 
-## Expose the Services
+A KUBERNETES CRON JOB IS:
+
+
+### Create a Secret for the Twitter API credentials
+
+The cron job uses your Twitter API credentials to connect to the API and pull the stats, pulling them from environment variables inside the container.  Create a secret to store the Twitter API credentials and the name of the account to gather the stats from, substituting your own credentials and account name:
+
+```
+kubectl create secret generic twitter-creds \
+    --from-literal=TWITTER_ACCESS_SECRET=<your twitter access secret> \
+    --from-literal=TWITTER_ACCESS_TOKEN=<your twitter access token> \
+    --from-literal=TWITTER_API_KEY=<your twitter api key > \
+    --from-literal=TWITTER_API_SECRET=<your twitter api secret> \
+    --from-literal=TWITTER_USER=<your twitter username>
+```
+
+### Create a Cron Job
+
+Finally, it is time to create the cron job to gather statistics.  Unfortunately, `kubectl` doesn't have a way to create a cron job directly, so once again the object must be described in a YAML file, and loaded with `kubectl create -f <filename>`.
+
+Create a file named "cronjob.yml" describing the job to run:
+
+```
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  labels:
+    app: twittergraph
+  name: twittergraph
+spec:
+  concurrencyPolicy: Replace
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+    spec:
+      template:
+        metadata:
+        spec:
+          containers:
+          - envFrom:
+            - secretRef:
+                name: twitter-creds
+            - secretRef:
+                name: influxdb-creds
+            image: docker.io/clcollins/twittergraph:1.0
+            imagePullPolicy: Always
+            name: twittergraph
+          restartPolicy: Never
+  schedule: '*/15 * * * *'
+  successfulJobsHistoryLimit: 3
+```
+
+Looking over this file, the key pieces of a Kubernetes Cron Job are evident.  The Cron Job spec actually contains a "jobTemplate", describing the actual Kubernetes Job to run.  In this case, the job consists of a single container, with the twitter credentials and influxdb credentials secrets shared as environment variables using the `envFrom` that was used above in the deployments.
+
+This job uses a custom image from Docker Hub, `clcollins/twittergraph:1.0`.  This image is just python 3.6 and contains [the app.py Python script for TwitterGraph](https://github.com/clcollins/twitterGraph/blob/master/app.py).  (If you'd rather build the image yourself, you can follow the instructions in [BUILDING.md](https://github.com/clcollins/twitterGraph/blob/master/BUILDING.md) in the Github repo, to build the image with [Source To Image](https://github.com/openshift/source-to-image).)
+
+Wraping the Job template spec are the Cron Job spec options.  Arguably the most important part, outside of the job itself, is the `schedule`, in this case set to run every 15 minutes, forever.  The other important bit is the `concurrencyPolicy`.  In this case, the concurrency policy is set to "replace", so if the previous job is still running when it's time to start a new one, the pod running the old job is destroyed and replaced with a new pod.
+
+Use the `kubectl create -f cronjob.yml` command to create the cron job:
+
+```
+kubectl create -f cronjob.yaml
+cronjob.batch/twittergraph created
+```
+
+The cron job can then be validated with `kubectl describe cronjob twittergraph` (example truncated for brevity):
+
+```
+kubectl describe cronjob twitterGraph
+Name:                       twittergraph
+Namespace:                  twittergraph
+Labels:                     app=twittergraph
+Annotations:                <none>
+Schedule:                   */15 * * * *
+Concurrency Policy:         Replace
+Suspend:                    False
+Starting Deadline Seconds:  <unset>
+```
+
+
 
 ## OKD Extras
 

@@ -596,7 +596,7 @@ spec:
             imagePullPolicy: Always
             name: twittergraph
           restartPolicy: Never
-  schedule: '*/15 * * * *'
+  schedule: '*/3 * * * *'
   successfulJobsHistoryLimit: 3
 ```
 
@@ -621,24 +621,19 @@ Name:                       twittergraph
 Namespace:                  twittergraph
 Labels:                     app=twittergraph
 Annotations:                <none>
-Schedule:                   */15 * * * *
+Schedule:                   */3 * * * *
 Concurrency Policy:         Replace
 Suspend:                    False
 Starting Deadline Seconds:  <unset>
 ```
 
+_Note:_ with a schedule set to `*/3 * * * *` - Kubernetes won't immediately start the new job.  It will wait 3 minutes for the first period to pass.  If you'd like to see immediate results, you can edit the cron job with `kubectl edit cronjob twittergraph`, and change the schedule to `* * * * *` temporarily, to run every minute.  Just don't forget to change it back when you're done.
 
+## Success!
 
-## OKD Extras
+That should be it!  If you've followed all the steps correctly, you will be left with an InfluxDB database, a Cron Job collecting stats from your Twitter account, and a Grafana deployment to view the data.  For production clusters or cloud deployments of Kubernetes or OpenShift visit the LoadBalancer IP to login to Grafana using the credentials you set with the GF_SECURITY_ADMIN_USER and GF_SECURITY_ADMIN_PASSWORD set earlier.  After logging in, select the TwitterGraph dashboard from the "Home" dropdown at the top-left of the screen.  You should see something like this:
 
-*   ImageStreams
-*   BuildConfigs
-*   OKD registry
-*   DeploymentConfigs
-
-### <a name="okd_considerations"></a> OKD Considerations
-
-*   Images must support random UID
+![A new TwitterGraph deployment, with just a little data](images/twittergraph_new.png "A new TwitterGraph deployment, with just a little data")
 
 ## Where to go from Where
 

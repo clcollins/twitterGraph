@@ -1168,7 +1168,7 @@
     "list": []
   },
   "time": {
-    "from": "now-30d",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {
@@ -1197,7 +1197,7 @@
     ]
   },
   "timezone": "",
-  "title": "Tweetstats",
+  "title": "TwitterGraph",
   "uid": "b6TPTLaiz",
   "version": 9
 }

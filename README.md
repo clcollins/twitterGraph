@@ -2,13 +2,16 @@
 
 ![TwitterGraph data in Grafana](images/twittergraph.png "TwitterGraph data in Grafana")
 
+
+
+
+
 ## Requirements
 
 *   A Twitter account to Monitor
 *   A Twitter Developer API Account for gathering stats
 *   A Kubernetes or OKD cluster (or, MiniKube or MiniShift)
 *   The `kubectl` or `oc` cli tools installed
-
 
 ## What you'll learn
 
@@ -635,7 +638,8 @@ That should be it!  If you've followed all the steps correctly, you will be left
 
 ![A new TwitterGraph deployment, with just a little data](images/twittergraph_new.png "A new TwitterGraph deployment, with just a little data")
 
-## Where to go from Where
+## Where to go from here
 
-*   Extend TwitterGraph for daily database
-*   Correlate posts with traffic
+The data collected by the TwitterGraph script is relatively simplistic.  The stats that are colleced are described in the ["data_points" dictionary in the app.py script](https://github.com/clcollins/twitterGraph/blob/master/app.py#L103-L109), but there's [a ton of data available](https://tweepy.readthedocs.io/en/v3.5.0/api.html#tweepy-api-twitter-api-wrapper).  Adding a new Cron Job that runs daily to collect the day's activity (number of post, number of follows, etc.) would be a natural extension of the data.
+
+More interesting, probably, would be the collection of the daily data correllated together:  how many followers were gained or lost based on the number of posts that day, etc..

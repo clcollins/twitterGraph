@@ -633,7 +633,7 @@ _Note:_ with a schedule set to `*/3 * * * *` - Kubernetes won't immediately star
 
 ## Success!
 
-That should be it!  If you've followed all the steps correctly, you will be left with an InfluxDB database, a Cron Job collecting stats from your Twitter account, and a Grafana deployment to view the data.  For production clusters or cloud deployments of Kubernetes or OpenShift visit the LoadBalancer IP to login to Grafana using the credentials you set with the `GF_SECURITY_ADMIN_USER` and `GF_SECURITY_ADMIN_PASSWORD` set earlier.  After logging in, select the TwitterGraph dashboard from the "Home" dropdown at the top-left of the screen.  You should see something like this:
+That should be it!  If you've followed all the steps correctly, you will be left with an InfluxDB database, a Cron Job collecting stats from your Twitter account, and a Grafana deployment to view the data.  For production clusters or cloud deployments of Kubernetes or OpenShift visit the LoadBalancer IP to login to Grafana using the credentials you set with the `GF_SECURITY_ADMIN_USER` and `GF_SECURITY_ADMIN_PASSWORD` set earlier.  After logging in, select the TwitterGraph dashboard from the "Home" dropdown at the top-left of the screen.  You should see something like the image below, with the current counts for your followers, folks you are following, status updates, likes and lists.  It's probably a bit boring at first, but if you leave it running, over time and with more data collection, the graphs will start to look more interesting and provide more useful data!
 
 ![A new TwitterGraph deployment, with just a little data](images/twittergraph_new.png "A new TwitterGraph deployment, with just a little data")
 

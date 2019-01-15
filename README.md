@@ -2,9 +2,7 @@
 
 ![TwitterGraph data in Grafana](images/twittergraph.png "TwitterGraph data in Grafana")
 
-
-
-
+Kubernetes is the de facto leader in Container Orchestration on the market right now, and it is an amazingly configurable and powerful orchestration tool, at that.  As with many powerful tools, though, it can be somewhat confusing when first approached.  This walkthough will cover the basics of creating multiple pods, configuring them with secret credentials and configuration files, and exposing the services to the world by creating an InfluxDB and Grafana deployment and Kubernetes Cron Job to gather statistics about your Twitter account from the Twitter Developer API, all deployed on Kubernetes or OKD (formerly OpenShift Origin).
 
 ## Requirements
 
@@ -551,8 +549,9 @@ At this point, Grafana is configured to talk to InfluxDB, and has and automatica
 
 ## Create the CronJob
 
-A KUBERNETES CRON JOB IS:
+A [Kubernetes Cron Job](https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/) is, like it's namesake [Cron](https://en.wikipedia.org/wiki/Cron), a way to run a job on a particular schedule.  In the case of Kubernetes, the job is a task running in a container: a [Kubernetes Job](https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/) scheduled and tracked by Kubernetes to ensure its completion.
 
+For this project, the Cron Job is a single container running [a Python script to gather Twitter stats](https://github.com/clcollins/twitterGraph/blob/master/app.py).
 
 ### Create a Secret for the Twitter API credentials
 
@@ -642,4 +641,4 @@ That should be it!  If you've followed all the steps correctly, you will be left
 
 The data collected by the TwitterGraph script is relatively simplistic.  The stats that are colleced are described in the ["data_points" dictionary in the app.py script](https://github.com/clcollins/twitterGraph/blob/master/app.py#L103-L109), but there's [a ton of data available](https://tweepy.readthedocs.io/en/v3.5.0/api.html#tweepy-api-twitter-api-wrapper).  Adding a new Cron Job that runs daily to collect the day's activity (number of post, number of follows, etc.) would be a natural extension of the data.
 
-More interesting, probably, would be the collection of the daily data correllated together:  how many followers were gained or lost based on the number of posts that day, etc..
+More interesting, probably, would be the collection of the daily data correllated together:  how many followers were gained or lost based on the number of posts that day, etc.
